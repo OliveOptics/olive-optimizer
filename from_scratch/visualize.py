@@ -112,9 +112,8 @@ def trace_and_draw_ray(ax, surfaces, gaps, h0, nu0, z_positions, color='blue',
         c = surfaces[i][0]
         z_hit[i] = z_positions[i] + sag(c, abs(h[i]))
 
-    # Before first surface
-    z_start = z_hit[0] - 3.0
-    # Back-propagate: h_start = h[0] - nu0 * (z_hit[0] - z_start) / n_before
+    # Before first surface — short lead-in only
+    z_start = z_hit[0] - 2.0
     n_before = surfaces[0][1]
     h_start = h[0] - (nu0 / n_before) * (z_hit[0] - z_start)
     ax.plot([z_start, z_hit[0]], [h_start, h[0]],
@@ -125,12 +124,21 @@ def trace_and_draw_ray(ax, surfaces, gaps, h0, nu0, z_positions, color='blue',
         ax.plot([z_hit[i], z_hit[i+1]], [h[i], h[i+1]],
                 color=color, alpha=alpha, linewidth=linewidth)
 
-    # After last surface — extend to image
+    # After last surface — extend toward image, capped
     if abs(nu[-1]) > 1e-12:
         bfl = -h[-1] / nu[-1]
         z_img = z_hit[-1] + bfl
-        ax.plot([z_hit[-1], z_img], [h[-1], 0.0],
-                color=color, alpha=alpha, linewidth=linewidth)
+        # Cap extension to reasonable range
+        max_extend = 20.0
+        if abs(z_img - z_hit[-1]) > max_extend:
+            z_end = z_hit[-1] + max_extend * np.sign(bfl)
+            n_after = surfaces[-1][2]
+            h_end = h[-1] + nu[-1] / n_after * (z_end - z_hit[-1])
+            ax.plot([z_hit[-1], z_end], [h[-1], h_end],
+                    color=color, alpha=alpha, linewidth=linewidth)
+        else:
+            ax.plot([z_hit[-1], z_img], [h[-1], 0.0],
+                    color=color, alpha=alpha, linewidth=linewidth)
 
 
 def visualize_system(surfaces, gaps, stop_idx, f_number, field_angle_deg,
@@ -144,17 +152,27 @@ def visualize_system(surfaces, gaps, stop_idx, f_number, field_angle_deg,
     sa = efl / (2 * f_number)
     h_m, _ = ynu_trace(surfaces, gaps, sa, 0.0)
 
-    # Beam semi-diameter per element: max ray height on either surface + margin
+    # Include off-axis beam for sizing elements
     n_elements = len(surfaces) // 2
+    try:
+        h0_c, nu0_c = find_chief_ray_initial(surfaces, gaps, stop_idx,
+                                              field_angle_deg)
+        h_c, _ = ynu_trace(surfaces, gaps, h0_c, nu0_c)
+    except Exception:
+        h_c = np.zeros_like(h_m)
+
+    # Beam semi-diameter per element: max of (marginal + chief) on either surface
     beam_sd = []
     for elem in range(n_elements):
-        h_max = max(abs(h_m[2*elem]), abs(h_m[2*elem+1]))
-        beam_sd.append(h_max * 1.3)  # 30% margin for drawing
+        i_f, i_b = 2*elem, 2*elem+1
+        h_max = max(abs(h_m[i_f]) + abs(h_c[i_f]),
+                    abs(h_m[i_b]) + abs(h_c[i_b]))
+        beam_sd.append(h_max * 1.15)
 
     # Draw elements sized to beam
     z_pos = draw_system(ax, surfaces, gaps, beam_sd, stop_idx)
 
-    # On-axis ray fan
+    # On-axis ray fan (blue)
     for frac in [1.0, 0.7, 0.3]:
         h0 = sa * frac
         trace_and_draw_ray(ax, surfaces, gaps, h0, 0.0, z_pos,
@@ -162,6 +180,40 @@ def visualize_system(surfaces, gaps, stop_idx, f_number, field_angle_deg,
         trace_and_draw_ray(ax, surfaces, gaps, -h0, 0.0, z_pos,
                            color='blue', alpha=0.5)
 
+    # Full field ray fan (red)
+    try:
+        h0_c, nu0_c = find_chief_ray_initial(surfaces, gaps, stop_idx,
+                                              field_angle_deg)
+        trace_and_draw_ray(ax, surfaces, gaps, h0_c, nu0_c, z_pos,
+                           color='red', alpha=0.6, linewidth=1.2)
+        for frac in [1.0, 0.7, 0.3]:
+            trace_and_draw_ray(ax, surfaces, gaps, h0_c + sa * frac, nu0_c,
+                               z_pos, color='red', alpha=0.3)
+            trace_and_draw_ray(ax, surfaces, gaps, h0_c - sa * frac, nu0_c,
+                               z_pos, color='red', alpha=0.3)
+    except Exception:
+        pass
+
+    # Half field ray fan (green)
+    try:
+        half_field = field_angle_deg / 2
+        h0_h, nu0_h = find_chief_ray_initial(surfaces, gaps, stop_idx, half_field)
+        trace_and_draw_ray(ax, surfaces, gaps, h0_h, nu0_h, z_pos,
+                           color='green', alpha=0.5, linewidth=1.0)
+        for frac in [1.0, 0.7, 0.3]:
+            trace_and_draw_ray(ax, surfaces, gaps, h0_h + sa * frac, nu0_h,
+                               z_pos, color='green', alpha=0.25)
+            trace_and_draw_ray(ax, surfaces, gaps, h0_h - sa * frac, nu0_h,
+                               z_pos, color='green', alpha=0.25)
+    except Exception:
+        pass
+
+    # Set axis limits based on system extent
+    z_min = z_pos[0] - 5
+    z_max = z_pos[-1] + 20
+    h_extent = max(beam_sd) * 1.3
+    ax.set_xlim(z_min, z_max)
+    ax.set_ylim(-h_extent, h_extent)
     ax.set_xlabel('z (mm)')
     ax.set_ylabel('height (mm)')
     ax.set_aspect('equal')

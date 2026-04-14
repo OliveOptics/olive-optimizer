@@ -150,6 +150,21 @@ def evaluate(args):
     except Exception:
         return None
 
+    # Check air gap clearance — lenses must not overlap
+    min_air_clearance = 0.3  # mm
+    for i in range(n_elements - 1):
+        # Beam height at back of elem i and front of elem i+1
+        i_back = 2*i + 1
+        i_front = 2*(i+1)
+        h_at_gap = max(abs(h_m[i_back]) + abs(h_c[i_back]),
+                       abs(h_m[i_front]) + abs(h_c[i_front])) * 1.15
+        # Clearance = air_gap - sag_back(elem_i) + sag_front(elem_{i+1})
+        sag_back = _sag(c2_list[i], h_at_gap)
+        sag_front = _sag(c1_list[i+1], h_at_gap)
+        clearance = d_air_list[i] - sag_back + sag_front
+        if clearance < min_air_clearance:
+            return None
+
     bfl = -h_m[-1] / nu_m[-1] if abs(nu_m[-1]) > 1e-12 else 0
     ttl = sum(g[0] for g in gaps) + bfl
     cra = np.degrees(np.arctan(nu_c[-1]))
