@@ -10,9 +10,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'gpu'))
 
-from parse_zmx import ynu_trace, find_chief_ray_initial
+from host import ynu_trace, exact_trace, find_chief_ray_initial
 
 
 def sag(c, h):
@@ -96,11 +96,11 @@ def draw_system(ax, surfaces, gaps, beam_sd=None, stop_idx=None):
     return z
 
 
-def trace_and_draw_ray(ax, surfaces, gaps, h0, nu0, z_positions, color='blue',
+def trace_and_draw_ray(ax, surfaces, gaps, h0, u0, z_positions, color='blue',
                        alpha=0.5, linewidth=0.8):
-    """Trace a ray and draw it on the plot, with ray-surface intersections at sag."""
+    """Trace a ray using exact Snell's law and draw at sag-adjusted positions."""
     try:
-        h, nu = ynu_trace(surfaces, gaps, h0, nu0)
+        h, nu = exact_trace(surfaces, gaps, h0, u0)
     except Exception:
         return
 
@@ -112,33 +112,28 @@ def trace_and_draw_ray(ax, surfaces, gaps, h0, nu0, z_positions, color='blue',
         c = surfaces[i][0]
         z_hit[i] = z_positions[i] + sag(c, abs(h[i]))
 
-    # Before first surface — short lead-in only
+    # Before first surface
     z_start = z_hit[0] - 2.0
-    n_before = surfaces[0][1]
-    h_start = h[0] - (nu0 / n_before) * (z_hit[0] - z_start)
+    h_start = h[0] - np.tan(u0) * (z_hit[0] - z_start)
     ax.plot([z_start, z_hit[0]], [h_start, h[0]],
             color=color, alpha=alpha, linewidth=linewidth)
 
-    # Between surfaces
+    # Between surfaces — at sag-adjusted positions
     for i in range(K - 1):
         ax.plot([z_hit[i], z_hit[i+1]], [h[i], h[i+1]],
                 color=color, alpha=alpha, linewidth=linewidth)
 
-    # After last surface — extend toward image, capped
-    if abs(nu[-1]) > 1e-12:
-        bfl = -h[-1] / nu[-1]
-        z_img = z_hit[-1] + bfl
-        # Cap extension to reasonable range
-        max_extend = 20.0
-        if abs(z_img - z_hit[-1]) > max_extend:
-            z_end = z_hit[-1] + max_extend * np.sign(bfl)
-            n_after = surfaces[-1][2]
-            h_end = h[-1] + nu[-1] / n_after * (z_end - z_hit[-1])
-            ax.plot([z_hit[-1], z_end], [h[-1], h_end],
-                    color=color, alpha=alpha, linewidth=linewidth)
-        else:
-            ax.plot([z_hit[-1], z_img], [h[-1], 0.0],
-                    color=color, alpha=alpha, linewidth=linewidth)
+    # After last surface — extend forward using exact angle
+    extend = 15.0
+    nu_last = nu[-1]
+    if abs(nu_last) < 0.9999:
+        tan_U = nu_last / np.sqrt(1 - nu_last**2)
+    else:
+        tan_U = np.sign(nu_last) * 100.0
+    z_end = z_hit[-1] + extend
+    h_end = h[-1] + tan_U * extend
+    ax.plot([z_hit[-1], z_end], [h[-1], h_end],
+            color=color, alpha=alpha, linewidth=linewidth)
 
 
 def visualize_system(surfaces, gaps, stop_idx, f_number, field_angle_deg,
@@ -146,22 +141,27 @@ def visualize_system(surfaces, gaps, stop_idx, f_number, field_angle_deg,
     """Main visualization function."""
     fig, ax = plt.subplots(1, 1, figsize=(16, 6))
 
-    # Trace marginal ray to determine beam footprint for drawing
+    # Paraxial EFL and SA (for aperture sizing)
     h_u, nu_u = ynu_trace(surfaces, gaps, 1.0, 0.0)
     efl = -1.0 / nu_u[-1]
     sa = efl / (2 * f_number)
-    h_m, _ = ynu_trace(surfaces, gaps, sa, 0.0)
 
-    # Include off-axis beam for sizing elements
+    # Exact marginal ray for beam sizing
     n_elements = len(surfaces) // 2
+    h_m, _ = exact_trace(surfaces, gaps, sa, 0.0)
+
+    # Exact chief ray for beam sizing
     try:
         h0_c, nu0_c = find_chief_ray_initial(surfaces, gaps, stop_idx,
                                               field_angle_deg)
-        h_c, _ = ynu_trace(surfaces, gaps, h0_c, nu0_c)
+        u0_c = np.arctan(nu0_c)
+        h_c, _ = exact_trace(surfaces, gaps, h0_c, u0_c)
     except Exception:
         h_c = np.zeros_like(h_m)
+        u0_c = 0.0
+        h0_c = 0.0
 
-    # Beam semi-diameter per element: max of (marginal + chief) on either surface
+    # Beam semi-diameter per element
     beam_sd = []
     for elem in range(n_elements):
         i_f, i_b = 2*elem, 2*elem+1
@@ -172,41 +172,34 @@ def visualize_system(surfaces, gaps, stop_idx, f_number, field_angle_deg,
     # Draw elements sized to beam
     z_pos = draw_system(ax, surfaces, gaps, beam_sd, stop_idx)
 
-    # On-axis ray fan (blue)
+    # On-axis ray fan (blue) — exact trace, u0=0
     for frac in [1.0, 0.7, 0.3]:
-        h0 = sa * frac
-        trace_and_draw_ray(ax, surfaces, gaps, h0, 0.0, z_pos,
+        trace_and_draw_ray(ax, surfaces, gaps, sa * frac, 0.0, z_pos,
                            color='blue', alpha=0.5)
-        trace_and_draw_ray(ax, surfaces, gaps, -h0, 0.0, z_pos,
+        trace_and_draw_ray(ax, surfaces, gaps, -sa * frac, 0.0, z_pos,
                            color='blue', alpha=0.5)
 
-    # Full field ray fan (red)
+    # Full field ray fan (red) — exact trace
     try:
-        h0_c, nu0_c = find_chief_ray_initial(surfaces, gaps, stop_idx,
-                                              field_angle_deg)
-        trace_and_draw_ray(ax, surfaces, gaps, h0_c, nu0_c, z_pos,
-                           color='red', alpha=0.6, linewidth=1.2)
+        trace_and_draw_ray(ax, surfaces, gaps, h0_c, u0_c, z_pos,
+                           color='red', alpha=0.7, linewidth=1.2)
         for frac in [1.0, 0.7, 0.3]:
-            trace_and_draw_ray(ax, surfaces, gaps, h0_c + sa * frac, nu0_c,
-                               z_pos, color='red', alpha=0.3)
-            trace_and_draw_ray(ax, surfaces, gaps, h0_c - sa * frac, nu0_c,
-                               z_pos, color='red', alpha=0.3)
+            trace_and_draw_ray(ax, surfaces, gaps, h0_c + sa * frac, u0_c,
+                               z_pos, color='red', alpha=0.4)
+            trace_and_draw_ray(ax, surfaces, gaps, h0_c - sa * frac, u0_c,
+                               z_pos, color='red', alpha=0.4)
     except Exception:
         pass
 
-    # Half field ray fan (green)
-    try:
-        half_field = field_angle_deg / 2
-        h0_h, nu0_h = find_chief_ray_initial(surfaces, gaps, stop_idx, half_field)
-        trace_and_draw_ray(ax, surfaces, gaps, h0_h, nu0_h, z_pos,
-                           color='green', alpha=0.5, linewidth=1.0)
-        for frac in [1.0, 0.7, 0.3]:
-            trace_and_draw_ray(ax, surfaces, gaps, h0_h + sa * frac, nu0_h,
-                               z_pos, color='green', alpha=0.25)
-            trace_and_draw_ray(ax, surfaces, gaps, h0_h - sa * frac, nu0_h,
-                               z_pos, color='green', alpha=0.25)
-    except Exception:
-        pass
+    # Draw on-axis image plane
+    h_m_full, nu_m_full = ynu_trace(surfaces, gaps, sa, 0.0)
+    if abs(nu_m_full[-1]) > 1e-12:
+        bfl_ax = -h_m_full[-1] / nu_m_full[-1]
+        z_image = z_pos[-1] + bfl_ax
+        ax.axvline(x=z_image, color='black', linewidth=1.0, linestyle='-',
+                   alpha=0.4)
+        ax.text(z_image, -max(beam_sd)*1.1, 'IMG', ha='center', va='top',
+                fontsize=7)
 
     # Set axis limits based on system extent
     z_min = z_pos[0] - 5

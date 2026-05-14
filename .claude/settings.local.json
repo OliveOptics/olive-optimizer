@@ -6,7 +6,23 @@
       "Grep",
       "Bash(*)",
       "Edit",
-      "Write"
+      "Write",
+      "PowerShell(Get-ChildItem -Force | Where-Object { $_.Name -in 'projects','zmx_files' }; Write-Host '---'; if \\(Test-Path 'projects'\\) { Get-ChildItem -Path 'projects' -Force })",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(python --version; python -c \"import torch, pytest; print\\('torch', torch.__version__\\); print\\('pytest', pytest.__version__\\); print\\('cuda', torch.cuda.is_available\\(\\)\\)\")",
+      "PowerShell(python -m venv .venv-win; .venv-win\\\\Scripts\\\\python.exe -m pip install --upgrade pip --quiet; Write-Output \"venv created\")",
+      "PowerShell(Get-Process *)",
+      "PowerShell(.venv-win\\\\Scripts\\\\python.exe -c \"import torch; print\\('torch', torch.__version__\\); print\\('cuda', torch.cuda.is_available\\(\\)\\); print\\('device', torch.cuda.get_device_name\\(0\\) if torch.cuda.is_available\\(\\) else 'none'\\)\")",
+      "PowerShell(python -m venv C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt; C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe -m pip install --upgrade pip --quiet; C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe -m pip install torch==2.12.0 numpy pytest matplotlib --extra-index-url https://download.pytorch.org/whl/cu132 --quiet 2>&1 | Select-Object -Last 10; Write-Output \"---\"; C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe -c \"import torch; print\\('torch', torch.__version__\\); print\\('cuda', torch.cuda.is_available\\(\\)\\)\")",
+      "PowerShell(C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe -m pytest lens_opt\\\\tests\\\\test_forward_trace.py -v 2>&1)",
+      "PowerShell(C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe -m pytest lens_opt\\\\tests\\\\test_forward_trace.py -v 2>&1 | Select-Object -Last 20)",
+      "PowerShell(C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe lens_opt\\\\examples\\\\visualize_singlet.py)",
+      "PowerShell(C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe lens_opt\\\\examples\\\\testbench.py 2>&1 | Select-Object -Last 8)",
+      "PowerShell(C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe lens_opt\\\\examples\\\\testbench.py 2>&1 | Select-Object -Last 25)",
+      "PowerShell(Measure-Command *)",
+      "PowerShell(C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe lens_opt\\\\examples\\\\paraxial_sweep.py)",
+      "PowerShell(C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe lens_opt\\\\examples\\\\multi_element_sweep.py)",
+      "PowerShell(C:\\\\Users\\\\bwyan\\\\.venvs\\\\lens-opt\\\\Scripts\\\\python.exe -m pytest lens_opt\\\\tests\\\\test_gradients.py -v 2>&1 | Select-Object -Last 30)"
     ]
   }
 }

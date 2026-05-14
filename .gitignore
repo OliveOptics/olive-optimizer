@@ -1,2 +1,10 @@
 __pycache__/
 *.pyc
+.venv/
+.venv-win/
+.pytest_cache/
+from_scratch/gpu/refined_*.json
+from_scratch/gpu/sweep_*.json
+from_scratch/refined_*.json
+from_scratch/sweep_*.json
+lens_opt/examples/*.png

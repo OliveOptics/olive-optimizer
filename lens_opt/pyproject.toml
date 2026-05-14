@@ -1,0 +1,17 @@
+[project]
+name = "lens_opt"
+version = "0.1.0"
+description = "Differentiable 2D meridional lens optimizer with Levenberg-Marquardt"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1",
+    "numpy",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".."]
